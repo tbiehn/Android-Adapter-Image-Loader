@@ -1,0 +1,51 @@
+This is a free library for android apps released under the WTFPL v2.
+
+It provides functionality for the Asynchronous loading of images in rows of an AdapterView and avoids
+calling offscreen image requests.
+
+It uses two low priority worker threads which work off a bound-length LIFO stack. The length of the 
+stack is determined by the visible rows of the parent AdapterView.
+
+Use with your efficient convertView getView algorithms!
+
+Example usage:
+public class X extends ListActivity {
+ ...
+ private AdapterImageLoader imageLoader;
+ 
+ public void onCreate(Bundle savedInstanceState) {
+  super.onCreate(savedInstanceState);
+  imageLoader = new AdapterImageLoader(this.getListView());
+  ...
+  setListAdapter(new ArrayAdapter<...>(getActivity(),
+		  ..., ...) {
+		  ...
+	  @Override
+	  public View getView(int position, View convertView, ViewGroup parent) {
+		  ...
+		  final ImageView pic = (ImageView) convertView
+				  .findViewById(...);
+				  //Clear the old one from createView
+		  pic.setImageBitmap(null);
+		  try {
+			  BitmapCallback callback = new BitmapCallback() {
+				  @Override
+				  public void callback(Bitmap x) {
+					  {
+						pic.setImageBitmap(x);  
+					  }
+				  }
+			  };
+			  imageLoader.addImage(new URL("HTTP://URL"), callback);
+		  } catch (Exception e) {
+			  e.printStackTrace();
+		  }
+		  }
+		  return convertView;
+	  }
+  });
+
+ }
+}
+
+For ListFragments move the imageLoader set into onActivityCreated(...)
