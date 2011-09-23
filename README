@@ -6,6 +6,8 @@ calling offscreen image requests.
 It uses two low priority worker threads which work off a bound-length LIFO stack. The length of the 
 stack is determined by the visible rows of the parent AdapterView.
 
+Use LegacyAdapterImageLoader for API levels under 9.
+
 Use with your efficient convertView getView algorithms!
 
 Example usage:
