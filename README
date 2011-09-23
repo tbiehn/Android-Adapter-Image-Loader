@@ -30,15 +30,7 @@ public class X extends ListActivity {
 				  //Clear the old one from createView
 		  pic.setImageBitmap(null);
 		  try {
-			  BitmapCallback callback = new BitmapCallback() {
-				  @Override
-				  public void callback(Bitmap x) {
-					  {
-						pic.setImageBitmap(x);  
-					  }
-				  }
-			  };
-			  imageLoader.addImage(new URL("HTTP://URL"), callback);
+			  imageLoader.addImage(new URL("HTTP://URL"), pic);
 		  } catch (Exception e) {
 			  e.printStackTrace();
 		  }

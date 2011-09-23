@@ -31,15 +31,8 @@ import android.widget.AdapterView;
  * 
  */
 public class LegacyAdapterImageLoader {
-	/**
-	 * Provides callback functionality for image grabs.
-	 * 
-	 * @author Travis Biehn
-	 * 
-	 */
-	public static abstract class BitmapCallback {
-		public abstract void callback(Bitmap x);
-	}
+
+	private ConcurrentHashMap<ImageView, LoadPair> cache = new ConcurrentHashMap<ImageView, LoadPair>();
 
 	/**
 	 * Data structure for keeping track of images and their callbacks for worker
@@ -48,11 +41,12 @@ public class LegacyAdapterImageLoader {
 	 * @author Travis Biehn
 	 * 
 	 */
+
 	public static class LoadPair {
 		public URL url;
-		public BitmapCallback callback;
+		public ImageView callback;
 
-		public LoadPair(URL url, BitmapCallback callback) {
+		public LoadPair(URL url, ImageView callback) {
 			this.url = url;
 			this.callback = callback;
 		}
@@ -75,21 +69,12 @@ public class LegacyAdapterImageLoader {
 		private static final long serialVersionUID = 1L;
 		private static final int KLUDGEFACTOR = 3; // Magical kludge constant
 
-		private int maxEntries() {
-			// Visibile portion of the adapterView, might break, might not.
-			Log.v("AdapterImageLoader", "Visible Portion: "+(adapterView.getLastVisiblePosition() - adapterView
-					.getFirstVisiblePosition())); // Starts from negative numbers....
-			return (adapterView.getLastVisiblePosition() - adapterView
-					.getFirstVisiblePosition()) + KLUDGEFACTOR;
-		}
-
 		public FixedStack() {
 		}
 
 		public boolean add(T x) {
 			synchronized (this) {
 				super.push(x);
-				this.trimEntries();
 				this.notify();
 			}
 			return true;
@@ -99,7 +84,6 @@ public class LegacyAdapterImageLoader {
 		public void addFirst(T x) {
 			synchronized (this) {
 				super.push(x);
-				this.trimEntries();
 				this.notify();
 			}
 		}
@@ -112,18 +96,7 @@ public class LegacyAdapterImageLoader {
 			}
 		}
 
-		/**
-		 * Keeps the stack to a fixed size.
-		 */
-		private void trimEntries() {
-			int toTrim = super.size() - maxEntries();
-			if (toTrim > 0) {
-				for (int i = 0; i < toTrim; i++) {
-					super.remove(super.size() - 1); // Pop off the end (oldest)
-													// entries.
-				}
-			}
-		}
+
 
 		/**
 		 * Blocks until an item is available to grab.
@@ -190,23 +163,30 @@ public class LegacyAdapterImageLoader {
 				while (true) {
 					try {
 						LoadEntry currentEntry = workQueue.takeFirst();
-						for (LoadPair pair : currentEntry.list) {
-							URL newurl = pair.url;
-							final BitmapCallback callback = pair.callback;
-							final URLConnection connection = newurl
-									.openConnection();
-							// If you have a cache implementation, use it.
-							connection.setUseCaches(true);
+						for (final LoadPair pair : currentEntry.list) {
+							final URL newurl = pair.url;
+							if (pair.callback != null) {
+								final URLConnection connection = newurl
+										.openConnection();
+								// If you have a cache implementation, use it.
+								connection.setUseCaches(true);
 
-							final Bitmap out = BitmapFactory
-									.decodeStream(connection.getInputStream());
-							// Post to callback in the UI thread.
-							handler.post(new Runnable() {
-								@Override
-								public void run() {
-									callback.callback(out);
+								final Bitmap out = BitmapFactory
+										.decodeStream(connection
+												.getInputStream());
+								final ImageView oldcb = pair.callback;
+								if (oldcb != null) {
+									// Post to callback in the UI thread.
+									handler.post(new Runnable() {
+										@Override
+										public void run() {
+											final ImageView oldcb = pair.callback;
+											if (oldcb != null)
+												oldcb.setImageBitmap(out);
+										}
+									});
 								}
-							});
+							}
 						}
 					} catch (InterruptedException e1) {
 						// Skip along.
@@ -242,10 +222,21 @@ public class LegacyAdapterImageLoader {
 	 * @param url
 	 * @param callback
 	 */
-	public void addImage(URL url, BitmapCallback callback) {
+	public void addImage(URL url, ImageView callback) {
 		LoadEntry le = new LoadEntry();
 		le.list = new ArrayList<LoadPair>();
 		le.list.add(new LoadPair(url, callback));
+		addToWorkQueue(le);
+	}
+
+	private void addToWorkQueue(LoadEntry le) {
+		for (LoadPair p : le.list) {
+			LoadPair old = cache.put(p.callback, p);
+			if (old != null) {
+				// Prevent callback from firing on old view.
+				old.callback = null;
+			}
+		}
 		workQueue.add(le);
 	}
 
@@ -259,7 +250,7 @@ public class LegacyAdapterImageLoader {
 		LoadEntry le = new LoadEntry();
 		le.list = new ArrayList<LoadPair>();
 		le.list.add(loadPair);
-		workQueue.add(le);
+		addToWorkQueue(le);
 	}
 
 	/**
@@ -270,6 +261,6 @@ public class LegacyAdapterImageLoader {
 	public void addLoadPairs(List<LoadPair> loadPairs) {
 		LoadEntry le = new LoadEntry();
 		le.list = loadPairs;
-		workQueue.add(le);
+		addToWorkQueue(le);
 	}
 }
