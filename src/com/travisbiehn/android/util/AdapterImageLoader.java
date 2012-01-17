@@ -119,6 +119,8 @@ public class AdapterImageLoader {
 
 	/**
 	 * Low priority ThreadFactory for the image grab threads.
+	 * 
+	 * @author Travis Biehn
 	 */
 	private static ThreadFactory threadFactory = new ThreadFactory() {
 		ThreadFactory tf = Executors.defaultThreadFactory();
@@ -158,32 +160,7 @@ public class AdapterImageLoader {
 			public void run() {
 				while (true) {
 					try {
-						LoadEntry currentEntry = workQueue.takeFirst();
-						for (final LoadPair pair : currentEntry.list) {
-							final URL newurl = pair.url;
-							if (pair.callback != null) {
-								final URLConnection connection = newurl
-										.openConnection();
-								// If you have a cache implementation, use it.
-								connection.setUseCaches(true);
-
-								final Bitmap out = BitmapFactory
-										.decodeStream(connection
-												.getInputStream());
-								final ImageView oldcb = pair.callback;
-								if (oldcb != null) {
-									// Post to callback in the UI thread.
-									handler.post(new Runnable() {
-										@Override
-										public void run() {
-											final ImageView oldcb = pair.callback;
-											if (oldcb != null)
-												oldcb.setImageBitmap(out);
-										}
-									});
-								}
-							}
-						}
+						tryLoadingNextImage( );
 					} catch (InterruptedException e1) {
 						// Skip along.
 					} catch (final IOException e) {
@@ -193,9 +170,44 @@ public class AdapterImageLoader {
 				}
 
 			}
+
+			
 		};
 	}
+	/**
+	 * Method removes top item from work queue, blocking until one becomes available if necessary.
+	 * @throws InterruptedException
+	 * @throws IOException
+	 */
+	private void tryLoadingNextImage( ) throws InterruptedException, IOException
+	{
+		LoadEntry currentEntry = workQueue.takeFirst();
+		for (final LoadPair pair : currentEntry.list) {
+			final URL newurl = pair.url;
+			if (pair.callback != null) {
+				final URLConnection connection = newurl
+						.openConnection();
+				// If you have a cache implementation, use it.
+				connection.setUseCaches(true);
 
+				final Bitmap out = BitmapFactory
+						.decodeStream(connection
+								.getInputStream());
+				final ImageView oldcb = pair.callback;
+				if (oldcb != null) {
+					// Post to callback in the UI thread.
+					handler.post(new Runnable() {
+						@Override
+						public void run() {
+							final ImageView oldcb = pair.callback;
+							if (oldcb != null)
+								oldcb.setImageBitmap(out);
+						}
+					});
+				}
+			}
+		}
+	}
 	/**
 	 * 
 	 * @param parentView
